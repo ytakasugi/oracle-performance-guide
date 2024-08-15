@@ -35,3 +35,102 @@ Nested Loopsにおいて、「駆動表に小さなテーブルを選ぶ(=検索
 もし、内部表の結合キーの列にインデックスが存在する場合、内部表のループをある程度スキップすることが可能である。
 
 ![](./drawio/output/nestedLoopSkip.png)
+
+- 内部表のインデックスが使用されるNested Loops
+
+```text
+Plan hash value: 3989081241
+
+--------------------------------------------------------------------------------------------
+| Id  | Operation                    | Name        | Rows  | Bytes | Cost (%CPU)| Time     |
+--------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT             |             |       |       |     3 (100)|          |
+|   1 |  NESTED LOOPS                |             |     1 |    54 |     3   (0)| 00:00:01 |
+|   2 |   NESTED LOOPS               |             |     1 |    54 |     3   (0)| 00:00:01 |
+|   3 |    TABLE ACCESS FULL         | EMPLOYEES   |     1 |    32 |     3   (0)| 00:00:01 |
+|*  4 |    INDEX UNIQUE SCAN         | PK_DEP      |     1 |       |     0   (0)|          |
+|   5 |   TABLE ACCESS BY INDEX ROWID| DEPARTMENTS |     1 |    22 |     0   (0)|          |
+--------------------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$58A6D7F6
+   3 - SEL$58A6D7F6 / E@SEL$1
+   4 - SEL$58A6D7F6 / D@SEL$1
+   5 - SEL$58A6D7F6 / D@SEL$1
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   4 - access("E"."DEPT_ID"="D"."DEPT_ID")
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - "E"."EMP_ID"[CHARACTER,8], "E"."EMP_NAME"[VARCHAR2,32],
+       "E"."DEPT_ID"[CHARACTER,2], "D"."DEPT_NAME"[VARCHAR2,32]
+   2 - "E"."EMP_ID"[CHARACTER,8], "E"."EMP_NAME"[VARCHAR2,32],
+       "E"."DEPT_ID"[CHARACTER,2], "D".ROWID[ROWID,10]
+   3 - "E"."EMP_ID"[CHARACTER,8], "E"."EMP_NAME"[VARCHAR2,32],
+       "E"."DEPT_ID"[CHARACTER,2]
+   4 - "D".ROWID[ROWID,10]
+   5 - "D"."DEPT_NAME"[VARCHAR2,32]
+
+Hint Report (identified by operation id / Query Block Name / Object Alias):
+Total hints for statement: 2
+---------------------------------------------------------------------------
+
+   1 -  SEL$58A6D7F6
+           -  LEADING(E D)
+
+   4 -  SEL$58A6D7F6 / D@SEL$1
+           -  USE_NL(D)
+```
+
+- 内部表のインデックスが使用されないNested Loops
+
+```text
+Plan hash value: 2277350873
+
+----------------------------------------------------------------------------------
+| Id  | Operation          | Name        | Rows  | Bytes | Cost (%CPU)| Time     |
+----------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT   |             |       |       |    13 (100)|          |
+|   1 |  NESTED LOOPS      |             |     6 |   180 |    13   (0)| 00:00:01 |
+|   2 |   TABLE ACCESS FULL| EMPLOYEES   |     6 |   120 |     3   (0)| 00:00:01 |
+|*  3 |   TABLE ACCESS FULL| DEPARTMENTS |     1 |    10 |     2   (0)| 00:00:01 |
+----------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$58A6D7F6
+   2 - SEL$58A6D7F6 / E@SEL$1
+   3 - SEL$58A6D7F6 / D@SEL$1
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   3 - filter("E"."DEPT_ID"="D"."DEPT_ID")
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - "E"."EMP_ID"[CHARACTER,8], "E"."EMP_NAME"[VARCHAR2,32],
+       "E"."DEPT_ID"[CHARACTER,2], "D"."DEPT_NAME"[VARCHAR2,32]
+   2 - "E"."EMP_ID"[CHARACTER,8], "E"."EMP_NAME"[VARCHAR2,32],
+       "E"."DEPT_ID"[CHARACTER,2]
+   3 - "D"."DEPT_NAME"[VARCHAR2,32]
+
+Hint Report (identified by operation id / Query Block Name / Object Alias):
+Total hints for statement: 3
+---------------------------------------------------------------------------
+
+   1 -  SEL$58A6D7F6
+           -  LEADING(E D)
+
+   3 -  SEL$58A6D7F6 / D@SEL$1
+           -  FULL(D)
+           -  USE_NL(D)
+```
