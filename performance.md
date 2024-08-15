@@ -36,6 +36,11 @@ Nested Loopsにおいて、「駆動表に小さなテーブルを選ぶ(=検索
 
 ![](./drawio/output/nestedLoopSkip.png)
 
+理想的なケースでは、駆動表のレコード1行に対して内部表のレコードが1行に対応していれば、
+内部表のインデックスをたどることでループすることなく行を特定できるため、内部表のループを
+省略できる。このときのアクセス行数は、R(A) × 2となる。
+
+
 - 内部表のインデックスが使用されるNested Loops
 
 ```text
@@ -133,4 +138,61 @@ Total hints for statement: 3
    3 -  SEL$58A6D7F6 / D@SEL$1
            -  FULL(D)
            -  USE_NL(D)
+```
+
+### 1-1-2.Hash Join
+
+ハッシュ結合は、まず小さいほうのテーブルをスキャンし、結合キーに対してハッシュ関数を適用することでハッシュ値に変換する。
+その次にもう一方のテーブルをスキャンして、結合キーがそのハッシュ値に存在するかどうか調べる・・・という方法で結合を行う。
+小さいほうのテーブルからハッシュテーブルを作成するのは、ハッシュテーブルはメモリ(PGA)に保持されるため、なるべき小さいほうが
+効率が良いためである。
+
+![](./drawio/output/hashJoin.png)
+
+- ハッシュ結合の実行計画
+
+```text
+Plan hash value: 2052257371
+
+----------------------------------------------------------------------------------
+| Id  | Operation          | Name        | Rows  | Bytes | Cost (%CPU)| Time     |
+----------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT   |             |       |       |     6 (100)|          |
+|*  1 |  HASH JOIN         |             |     6 |   180 |     6   (0)| 00:00:01 |
+|   2 |   TABLE ACCESS FULL| DEPARTMENTS |     4 |    40 |     3   (0)| 00:00:01 |
+|   3 |   TABLE ACCESS FULL| EMPLOYEES   |     6 |   120 |     3   (0)| 00:00:01 |
+----------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$58A6D7F6
+   2 - SEL$58A6D7F6 / D@SEL$1
+   3 - SEL$58A6D7F6 / E@SEL$1
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   1 - access("E"."DEPT_ID"="D"."DEPT_ID")
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - (#keys=1; rowset=256) "E"."DEPT_ID"[CHARACTER,2],
+       "D"."DEPT_NAME"[VARCHAR2,32], "E"."EMP_ID"[CHARACTER,8],
+       "E"."EMP_NAME"[VARCHAR2,32]
+   2 - (rowset=256) "D"."DEPT_ID"[CHARACTER,2],
+       "D"."DEPT_NAME"[VARCHAR2,32]
+   3 - (rowset=256) "E"."EMP_ID"[CHARACTER,8],
+       "E"."EMP_NAME"[VARCHAR2,32], "E"."DEPT_ID"[CHARACTER,2]
+
+Hint Report (identified by operation id / Query Block Name / Object Alias):
+Total hints for statement: 2
+---------------------------------------------------------------------------
+
+   1 -  SEL$58A6D7F6
+           -  LEADING(D E)
+
+   3 -  SEL$58A6D7F6 / E@SEL$1
+           -  USE_HASH(E)
 ```
