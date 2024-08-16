@@ -39,8 +39,6 @@ Nested Loopsにおいて、「駆動表に小さなテーブルを選ぶ(=検索
 - 内部表のインデックスが使用されるNested Loops
 
 ```text
-Plan hash value: 3989081241
-
 --------------------------------------------------------------------------------------------
 | Id  | Operation                    | Name        | Rows  | Bytes | Cost (%CPU)| Time     |
 --------------------------------------------------------------------------------------------
@@ -76,23 +74,11 @@ Column Projection Information (identified by operation id):
        "E"."DEPT_ID"[CHARACTER,2]
    4 - "D".ROWID[ROWID,10]
    5 - "D"."DEPT_NAME"[VARCHAR2,32]
-
-Hint Report (identified by operation id / Query Block Name / Object Alias):
-Total hints for statement: 2
----------------------------------------------------------------------------
-
-   1 -  SEL$58A6D7F6
-           -  LEADING(E D)
-
-   4 -  SEL$58A6D7F6 / D@SEL$1
-           -  USE_NL(D)
 ```
 
 - 内部表のインデックスが使用されないNested Loops
 
 ```text
-Plan hash value: 2277350873
-
 ----------------------------------------------------------------------------------
 | Id  | Operation          | Name        | Rows  | Bytes | Cost (%CPU)| Time     |
 ----------------------------------------------------------------------------------
@@ -122,17 +108,6 @@ Column Projection Information (identified by operation id):
    2 - "E"."EMP_ID"[CHARACTER,8], "E"."EMP_NAME"[VARCHAR2,32],
        "E"."DEPT_ID"[CHARACTER,2]
    3 - "D"."DEPT_NAME"[VARCHAR2,32]
-
-Hint Report (identified by operation id / Query Block Name / Object Alias):
-Total hints for statement: 3
----------------------------------------------------------------------------
-
-   1 -  SEL$58A6D7F6
-           -  LEADING(E D)
-
-   3 -  SEL$58A6D7F6 / D@SEL$1
-           -  FULL(D)
-           -  USE_NL(D)
 ```
 
 ### 1-1-2.Hash Join
@@ -147,8 +122,6 @@ Total hints for statement: 3
 - ハッシュ結合の実行計画
 
 ```text
-Plan hash value: 2052257371
-
 ----------------------------------------------------------------------------------
 | Id  | Operation          | Name        | Rows  | Bytes | Cost (%CPU)| Time     |
 ----------------------------------------------------------------------------------
@@ -180,16 +153,6 @@ Column Projection Information (identified by operation id):
        "D"."DEPT_NAME"[VARCHAR2,32]
    3 - (rowset=256) "E"."EMP_ID"[CHARACTER,8],
        "E"."EMP_NAME"[VARCHAR2,32], "E"."DEPT_ID"[CHARACTER,2]
-
-Hint Report (identified by operation id / Query Block Name / Object Alias):
-Total hints for statement: 2
----------------------------------------------------------------------------
-
-   1 -  SEL$58A6D7F6
-           -  LEADING(D E)
-
-   3 -  SEL$58A6D7F6 / E@SEL$1
-           -  USE_HASH(E)
 ```
 
 #### 1-1-2-1.Hash Joinの特徴
@@ -228,3 +191,188 @@ Sort Mergeは、結合対象のテーブルをそれぞれ結合キーでソー�
 - Hash Joinと違い、等直結合だけでなく不等号を使った結合にも利用できる。ただし、否定条件の結合では利用できない。
 - (原理的には)テーブルが結合キーでソート済みになっていれば、ソートをスキップできる。ただし、SQLではテーブルの行の物理配置は意識しないことになっているので、この恩恵を受けられるとしても実装依存となる。
 - テーブルをソートするため、片方のテーブルをすべてスキャンしたところで結合を終了できる。
+
+#### 1-1-3-2.Sort Mergeが有効なケース
+
+ソートをスキップできる例外的なケースでは考慮するに値するが、基本的にはNested LoopsとHash Joinが優先的な選択肢となる。
+
+### 1-1-4.意図せぬクロス結合
+
+クロス結合は、結合条件を記述しない結合である。
+つまり、結合対象の行の総当たり的なすべての組み合わせを網羅する、直積（デカルト積）を導出する直積結合（デカルト積結合、デカルト結合）のこと。
+
+通常、結合条件を記述しないことはないが、これが意図せずして現れることがある。
+これを俗に「三角結合」と呼ばれる。
+たとえば、以下のようなクエリの場合に生じる。
+
+```sql
+SELECT
+  A.COL_A, B.COL_B, C.COL_C
+FROM
+  TABLE_A A INNER JOIN TABLE_B B
+    ON A.COL_A = B.COL_B
+  INNER JOIN TABLE_C C
+    ON A.COL_A = C.COL_C
+;
+```
+
+上記のクエリは、TABLE_A、TABLE_B、TABLE_Cという3つのテーブルと結合しているが、結合条件が存在するのは、「TABLE_A - TABLE_B」と「TABLE_A - TABLE_C」の間だけである。
+「TABLE_B - TABLE_C」の間には結合条件が存在しないことを注目すること。
+図にすると、以下のようになる。
+
+![](./drawio/output/triangleJoin.png)
+
+人間が素朴に考えるのであれば、結合条件をたどる形で実行計画を組み立てます。したがって、考えられる選択肢として次の4通りが考えられる。
+
+1. TABLE_Aを駆動表にTABLE_Bと結合する。その結果とTABLE_Cを結合する。
+2. TABLE_Aを駆動表にTABLE_Cと結合する。その結果とTABLE_Bを結合する。
+3. TABLE_Bを駆動表にTABLE_Aと結合する。その結果とTABLE_Cを結合する。
+4. TABLE_Cを駆動表にTABLE_Aと結合する。その結果とTABLE_Bを結合する。
+
+実行計画としては、以下のようになる。
+
+- Nested Loopsが選択される場合
+
+以下の実行計画は、特に問題ない。
+
+```text
+-------------------------------------------------------------------------------
+| Id  | Operation           | Name    | Rows  | Bytes | Cost (%CPU)| Time     |
+-------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT    |         |       |       |     6 (100)|          |
+|   1 |  NESTED LOOPS       |         |     1 |     9 |     6   (0)| 00:00:01 |
+|   2 |   NESTED LOOPS      |         |     1 |     6 |     4   (0)| 00:00:01 |
+|   3 |    TABLE ACCESS FULL| TABLE_A |     1 |     3 |     2   (0)| 00:00:01 |
+|*  4 |    TABLE ACCESS FULL| TABLE_B |     1 |     3 |     2   (0)| 00:00:01 |
+|*  5 |   TABLE ACCESS FULL | TABLE_C |     1 |     3 |     2   (0)| 00:00:01 |
+-------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$9E43CB6E
+   3 - SEL$9E43CB6E / A@SEL$1
+   4 - SEL$9E43CB6E / B@SEL$1
+   5 - SEL$9E43CB6E / C@SEL$2
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   4 - filter("A"."COL_A"="B"."COL_B")
+   5 - filter("A"."COL_A"="C"."COL_C")
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - "A"."COL_A"[CHARACTER,1], "B"."COL_B"[CHARACTER,1],
+       "C"."COL_C"[CHARACTER,1]
+   2 - "A"."COL_A"[CHARACTER,1], "B"."COL_B"[CHARACTER,1]
+   3 - "A"."COL_A"[CHARACTER,1]
+   4 - "B"."COL_B"[CHARACTER,1]
+   5 - "C"."COL_C"[CHARACTER,1]
+```
+
+- クロス結合が選択される場合
+
+```text
+---------------------------------------------------------------------------------
+| Id  | Operation             | Name    | Rows  | Bytes | Cost (%CPU)| Time     |
+---------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT      |         |       |       |     6 (100)|          |
+|*  1 |  HASH JOIN            |         |     1 |     9 |     6   (0)| 00:00:01 |
+|   2 |   MERGE JOIN CARTESIAN|         |     1 |     6 |     4   (0)| 00:00:01 |
+|   3 |    TABLE ACCESS FULL  | TABLE_B |     1 |     3 |     2   (0)| 00:00:01 |
+|   4 |    BUFFER SORT        |         |     1 |     3 |     2   (0)| 00:00:01 |
+|   5 |     TABLE ACCESS FULL | TABLE_C |     1 |     3 |     2   (0)| 00:00:01 |
+|   6 |   TABLE ACCESS FULL   | TABLE_A |     1 |     3 |     2   (0)| 00:00:01 |
+---------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$9E43CB6E
+   3 - SEL$9E43CB6E / B@SEL$1
+   5 - SEL$9E43CB6E / C@SEL$2
+   6 - SEL$9E43CB6E / A@SEL$1
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   1 - access("A"."COL_A"="C"."COL_C" AND "A"."COL_A"="B"."COL_B")
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - (#keys=2; rowset=256) "C"."COL_C"[CHARACTER,1],
+       "A"."COL_A"[CHARACTER,1], "B"."COL_B"[CHARACTER,1]
+   2 - "B"."COL_B"[CHARACTER,1], "C"."COL_C"[CHARACTER,1]
+   3 - "B"."COL_B"[CHARACTER,1]
+   4 - (#keys=0) "C"."COL_C"[CHARACTER,1]
+   5 - (rowset=256) "C"."COL_C"[CHARACTER,1]
+   6 - (rowset=256) "A"."COL_A"[CHARACTER,1]
+```
+
+上記は、「TABLE_BとTABLE_Cを最初に結合し、その結果をTABLE_Aと結合する」という順序で結合しているが、前述の通りTABLE_BとTABLE_Cの間に結合条件がないため、
+クロス結合をせざるをえません。「MERGE JOIN CARTESIAN」は、Oracleでクロス結合を行うときのオペレーションです。
+実行計画はオプティマイザが選択しているため、いくつかあるアクセスパスのうち、もっともコストが低いと判断したと考えられる。
+
+#### 1-1-4-1.意図せぬクロス結合を回避するには
+
+意図せぬクロス結合をを回避する手段としては、結合条件が存在しないテーブル間にも、結果を変えないように結合条件を追加する方法がある。
+
+![](./drawio/output/triangleJoin2.png)
+
+これは、TABLE_BとTABLE_Cの間に結合条件を設定することが可能で、かつ追加しても結果に影響を与えない場合にしか有効ではないが、パフォーマンス面ではオプティマイザに選択肢を増やしてやるという積極的な意味がある。
+
+- 結合条件を追加したクエリ
+
+```sql
+SELECT
+  A.COL_A, B.COL_B, C.COL_C
+FROM
+  TABLE_A A INNER JOIN TABLE_B B
+    ON A.COL_A = B.COL_B
+  INNER JOIN TABLE_C C
+    ON A.COL_A = C.COL_C
+    AND C.COL_C = B.COL_B
+;
+```
+
+- 結合条件を追加したクエリの実行計画
+
+```text
+-------------------------------------------------------------------------------
+| Id  | Operation           | Name    | Rows  | Bytes | Cost (%CPU)| Time     |
+-------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT    |         |       |       |     6 (100)|          |
+|   1 |  NESTED LOOPS       |         |     1 |     9 |     6   (0)| 00:00:01 |
+|   2 |   NESTED LOOPS      |         |     1 |     6 |     4   (0)| 00:00:01 |
+|   3 |    TABLE ACCESS FULL| TABLE_A |     1 |     3 |     2   (0)| 00:00:01 |
+|*  4 |    TABLE ACCESS FULL| TABLE_B |     1 |     3 |     2   (0)| 00:00:01 |
+|*  5 |   TABLE ACCESS FULL | TABLE_C |     1 |     3 |     2   (0)| 00:00:01 |
+-------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$9E43CB6E
+   3 - SEL$9E43CB6E / A@SEL$1
+   4 - SEL$9E43CB6E / B@SEL$1
+   5 - SEL$9E43CB6E / C@SEL$2
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   4 - filter("A"."COL_A"="B"."COL_B")
+   5 - filter(("A"."COL_A"="C"."COL_C" AND "C"."COL_C"="B"."COL_B"))
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - "A"."COL_A"[CHARACTER,1], "B"."COL_B"[CHARACTER,1],
+       "C"."COL_C"[CHARACTER,1]
+   2 - "A"."COL_A"[CHARACTER,1], "B"."COL_B"[CHARACTER,1]
+   3 - "A"."COL_A"[CHARACTER,1]
+   4 - "B"."COL_B"[CHARACTER,1]
+   5 - "C"."COL_C"[CHARACTER,1]
+```
