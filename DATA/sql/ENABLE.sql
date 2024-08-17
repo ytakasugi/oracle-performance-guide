@@ -1,0 +1,128 @@
+SET SERVEROUTPUT ON
+
+--DECLARE
+--  CURSOR CUR IS
+--    SELECT
+--      TABLE_NAME
+--      , INDEX_NAME
+--      , COLUMN_NAME
+--      , COLUMN_NUM
+--      --カンマ区切りでカラム名を取得
+--      , LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_NUM) AS SEQ
+--    FROM
+--      TMP_UNIQUE_INDEX
+--    GROUP BY
+--       TABLE_NAME
+--      , INDEX_NAME
+--      , COLUMN_NAME
+--      , COLUMN_NUM
+--    ORDER BY
+--      COLUMN_NUM
+--    ;
+--
+--  V_STMT VARCHAR2(1000);
+--
+--BEGIN
+--すべてのINDEXを再構築
+--  FOR REC IN CUR LOOP
+--    V_STMT := 'ALTER INDEX ' || REC.INDEX_NAME || ' REBUILD';
+--    EXECUTE IMMEDIATE V_STMT;
+--  END LOOP;
+--END;
+--/
+
+DECLARE
+  CURSOR CUR IS
+    SELECT
+      'CREATE UNIQUE INDEX '
+      || INDEX_NAME
+      || ' ON '
+      || TABLE_NAME
+      || '('
+      || LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_NUM)
+      || ')'
+      || ' NOLOGGING' V_STMT
+    FROM
+      TMP_UNIQUE_INDEX
+    GROUP BY
+      TABLE_NAME
+      , INDEX_NAME
+    ;
+
+BEGIN
+  FOR REC IN CUR LOOP
+    DBMS_OUTPUT.PUT_LINE(REC.V_STMT);
+    --ユニークインデックスを作成
+--    V_STMT := 'CREATE UNIQUE INDEX ' || REC.INDEX_NAME || ' ON ' || REC.TABLE_NAME(REC.SEQ) || ' NOLOGGING';
+    EXECUTE IMMEDIATE REC.V_STMT;
+  END LOOP;
+END;
+/
+
+DECLARE
+  CURSOR CUR IS
+    SELECT
+      TABLE_NAME
+      , INDEX_NAME
+      , COLUMN_NAME
+      , COLUMN_NUM
+      --カンマ区切りでカラム名を取得
+      , LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_NUM) AS SEQ
+    FROM
+      TMP_UNIQUE_INDEX
+    GROUP BY
+       TABLE_NAME
+      , INDEX_NAME
+      , COLUMN_NAME
+      , COLUMN_NUM
+    ORDER BY
+      COLUMN_NUM
+    ;
+
+  V_STMT VARCHAR2(1000);
+
+
+BEGIN
+  FOR REC IN CUR LOOP
+    DBMS_OUTPUT.PUT_LINE(V_STMT);
+    --テーブルをロギングに戻す
+    V_STMT := 'ALTER TABLE ' || REC.TABLE_NAME || ' LOGGING';
+    EXECUTE IMMEDIATE V_STMT;
+  END LOOP;
+END;
+/
+
+DECLARE
+  CURSOR CUR IS
+    SELECT
+      TABLE_NAME
+      , INDEX_NAME
+      , COLUMN_NAME
+      , COLUMN_NUM
+      --カンマ区切りでカラム名を取得
+      , LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_NUM) AS SEQ
+    FROM
+      TMP_UNIQUE_INDEX
+    GROUP BY
+       TABLE_NAME
+      , INDEX_NAME
+      , COLUMN_NAME
+      , COLUMN_NUM
+    ORDER BY
+      COLUMN_NUM
+    ;
+
+  V_STMT VARCHAR2(1000);
+
+
+BEGIN
+  FOR REC IN CUR LOOP
+    DBMS_OUTPUT.PUT_LINE(V_STMT);
+    --プライマリーキー制約の復活
+    V_STMT := 'ALTER TABLE ' || REC.TABLE_NAME || ' ENABLE CONSTRAINT ' || REC.INDEX_NAME || ' USING INDEX ' || REC.INDEX_NAME;
+    EXECUTE IMMEDIATE V_STMT;
+  END LOOP;
+END;
+/
+
+quit

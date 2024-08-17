@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Oracle Test Data" basedir="..">
+    <import file="build-common.xml" />
+    <import file="build-misc.xml" />
+
+    <target name="UNLOCK_SCHEMA">
+        <antcall target="unlock.schema" />
+    </target>
+
+    <target name="LOCK_SCHEMA">
+        <antcall target="lock.schema" />
+    </target>
+
+    <target name="01_SRC_ORDERS_MASTER">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="src/01_SRC_ORDERS_MASTER" />
+            <param name="param.value" value="${oracle.username}" />
+        </antcall>
+        <antcall target="sql.loader">
+            <param name="filename" value="src/01_SRC_ORDERS_MASTER" />
+        </antcall>
+        <antcall target="gather.table.stats">
+            <param name="table.name" value="SRC_ORDERS_MASTER" />
+        </antcall>
+    </target>
+
+    <target name="02_SRC_ORDERS">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="src/02_SRC_ORDERS" />
+            <param name="param.value" value="${oracle.username} ${receive.date}" />
+        </antcall>
+        <antcall target="gather.table.stats">
+            <param name="table.name" value="SRC_ORDERS" />
+        </antcall>
+    </target>
+
+    <target name="03_ORDERS">
+        <antcall target="truncate.table">
+            <param name="table.name" value="ORDERS" />
+        </antcall>
+        <antcall target="sqlplus.noparam">
+            <param name="sql.name" value="master/01_ORDERS" />
+        </antcall>
+        <antcall target="gather.table.stats">
+            <param name="table.name" value="ORDERS" />
+        </antcall>
+    </target>
+
+    <target name="INSERT_ORDERS">
+        <antcall target="UNLOCK_SCHEMA" />
+        <antcall target="01_SRC_ORDERS_MASTER" />
+        <antcall target="02_SRC_ORDERS" />
+        <antcall target="03_ORDERS" />
+        <antcall target="LOCK_SCHEMA" />
+    </target>
+</project>

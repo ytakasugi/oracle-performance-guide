@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir="..">
+
+    <property environment="env" />
+    <property name="bin.dir" location="${env.ORACLE_HOME}/bin" />
+    <property file="environment/build.properties" />
+
+    <property name="oracle.username" value="${database.user.name}" />
+    <property name="oracle.password" value="${database.user.password}" />
+    <property name="oracle.dbname" value="${database.name}" />
+    <property name="oracle.system.password" value="${database.system.password}" /> 
+    <property name="oracle.pdb.name" value="${database.pdb.name}" /> 
+
+    <taskdef resource="net/sf/antcontrib/antlib.xml">
+        <classpath>
+            <pathelement location="lib/ant-contrib-1.0b3.jar"/>
+        </classpath>
+    </taskdef>
+
+    <target name="sqlplus.noparam">
+        <exec dir="${basedir}" executable="${bin.dir}/sqlplus">
+            <arg line=" -S ${oracle.username}/${oracle.password}@${oracle.pdb.name} @${sql.name} " />
+        </exec>
+    </target>
+    <target name="sqlplus.param">
+        <exec dir="${basedir}" executable="${bin.dir}/sqlplus">
+            <arg line=" -S ${oracle.username}/${oracle.password}@${oracle.pdb.name} @${sql.name} ${param.value} " />
+        </exec>
+    </target>
+    <target name="sqlplus.system">
+        <exec dir="${basedir}" executable="${bin.dir}/sqlplus">
+            <arg line=" -S system/${oracle.system.password} @${sql.name} ${param.value} " />
+        </exec>
+    </target>
+    <target name="sql.loader">
+        <exec dir="${basedir}" executable="${bin.dir}/sqlldr">
+            <arg line=" userid=${oracle.username}/${oracle.password}@${oracle.pdb.name} control=${filename}.ctl data=${filename}.csv log=${filename}.log bad=${filename}.bad direct=y " />
+        </exec>
+    </target>
+</project>

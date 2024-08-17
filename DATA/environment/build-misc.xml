@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir="..">
+    <import file="build-common.xml" />
+
+    <target name="unlock.schema">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/UNLOCK_SCHEMA" />
+            <param name="param.value" value="${oracle.username}" />
+        </antcall>
+    </target>
+
+    <target name="lock.schema">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/LOCK_SCHEMA" />
+            <param name="param.value" value="${oracle.username}" />
+        </antcall>
+    </target>
+
+    <target name="CREATE_STATS_TABLE">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/CREATE_STATS_TABLE" />
+            <param name="param.value" value="${oracle.username}" />
+        </antcall>
+    </target>
+
+    <target name="gather.schema.stats">
+    </target>
+
+    <target name="gather.table.stats">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/GATHER_TABLE_STATS" />
+	    <param name="param.value" value="${oracle.username} ${table.name}" />
+        </antcall>
+    </target>
+    <target name="EXPORT_SCHEMA_STATS">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/CREATE_STATS_TABLE" />
+            <param name="param.value" value="${oracle.username}" />
+        </antcall>
+    </target>
+    <target name="EXPORT_TABLE_STATS">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/EXPORT_TABLE_STATS" />
+            <param name="param.value" value="${oracle.username} ${table.name}" />
+        </antcall>
+    </target>
+    <target name="IMPORT_SCHEMA_STATS">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/IMPORT_SCHEMA_STATS" />
+            <param name="param.value" value="${oracle.username}" />
+        </antcall>
+    </target>
+    <target name="IMPORT_TABLE_STATS">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/IMPORT_TABLE_STATS" />
+            <param name="param.value" value="${oracle.username} ${table.name}" />
+        </antcall>
+    </target>
+    <target name="truncate.table">
+        <antcall target="sqlplus.param">
+            <param name="sql.name" value="sql/TRUNCATE_TABLE" />
+            <param name="param.value" value="${table.name}" />
+        </antcall>
+    </target>
+</project>
